@@ -1,0 +1,83 @@
+---
+title: "Assignment 3"
+author: "Li Nie, ln7375"
+date: "3/25/2019"
+output:
+  html_document:
+    df_print: paged
+---
+## Question 1
+### a. Explain how k-fold cross-validation is implemented.
+In  k-fold cross validation, the observations are randomly divided into k folds of approximately equal size. The first fold will be treated as a validation set, and the method/model will be fit on the remaining k-1 folds. The mean squared error will be then computed on the observations in the held-out fold, the "validation set" for this round. This procedure will be repeated k times; each time, a different fold of observations will be treated as a validation set. K estimates of the test error will be generated from such procedure. The k-fold cross validation estimate is computed by averaging these values,
+$$CV_{(k)} = \frac{1}{k}\sum_{i=1}^{k}MSE_i$$
+
+### b. What are the advantages and disadvantages of k-fold cross validation relative to
+### i. The validation set approach; and
+### ii. LOOCV?
+The validation set approach refers to randomly dividing the available set of observations into two parts, a training set and a validation set or hold-out set. Using the training set to fit the model and predicting responses on the validation set. So, it's just like one round of k-fold cross validation. Compared with this method, k-fold cross validation is more accurate as it conducts k estimates and uses all the observations to fit the model, since the statistical methods tend to perform better when trained on more observations. K-fold cross validation will also have less fluctuations on testing MSE. The validation estimate of the test error rate can be highly variable (depending on which observations are included in the training set and which observations are included in the validation set).
+
+The LOOCV refers to the leave-one-out cross validation, which means when doing k-fold cross validation, the validation set for each round is a single observation. LOOCV is essentially a special case of k-fold cross-validation in which k = n. LOOCV contains less bias, and it tends not to overestimate the test error rate. Performing LOOCV multiple times will always yield the same results, as there is no randomness in the training/validation set splits.  However, this approach has higher variance than k-fold cross-validation (bias-variance tradeoff, less bias, higher variance). Besides, as this method uses one single observation as its validation set, it requires more calculation resources than k-fold cross validation.
+
+## Question 2
+## Estimate the test error of this logistic regression model using the validation set approach.
+### a. Fit a logistic regression model that uses all predictors (except quality) to predict final_quality.
+
+```{r}
+redwine <- read.csv("redwine.csv")
+summary(redwine)
+vars <- names(redwine)
+vars
+
+quality.mean <- mean(redwine$quality)
+quality.mean
+
+redwine$final_quality <- ifelse(redwine$quality > quality.mean, 1, 0)
+
+set.seed(7)
+
+lr_clf <- glm(final_quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar 
+                 + chlorides  + free.sulfur.dioxide + total.sulfur.dioxide + density + pH 
+                 + sulphates + alcohol, data = redwine, family=binomial(link="logit"))
+summary(lr_clf)
+```
+### b. Using the validation set approach, estimate the test error of this model. In order to do this, you must perform the following steps:
+### i. Split the sample set into a training set and a validation set.
+### ii. Fit a multiple logistic regression model using only the training observations.
+### iii.Obtain a prediction of final_quality for each wine in the validation set by computing the posterior probability of high-quality for that wine, and classifying the wine to the high-quality category if the posterior probability is greater than 0.5.
+### iv.Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+Testing error is around 25.26%.
+```{r}
+
+library(caret)
+redwine.split <- createDataPartition(redwine$final_quality, p = 0.7, list = FALSE)
+training <- redwine[redwine.split,]
+validation <- redwine[-redwine.split,]
+
+set.seed(7)
+
+lr_clf_val <- glm(final_quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar 
+                 + chlorides  + free.sulfur.dioxide + total.sulfur.dioxide + density + pH 
+                 + sulphates + alcohol, data = training, family=binomial(link="logit"))
+
+y <- predict(lr_clf_val, validation, type="response")
+y <- ifelse(y > 0.5, 1, 0)
+y
+test_error <- mean(y != validation$final_quality)
+test_error
+```
+## Question 3
+### a. Write a function, boot_fn(), that takes as input the redwine data set as well as an index of the observations, and that outputs the coefficient estimates for each predictor in the multiple logistic regression model.
+```{r}
+boot_fn <- function(redwine, index)
++ return(coef(glm(final_quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar 
+                 + chlorides  + free.sulfur.dioxide + total.sulfur.dioxide + density + pH 
+                 + sulphates + alcohol, data = redwine, subset = index, family=binomial(link="logit"))))
+boot_fn(redwine, 1:1599)
+```
+### b. Use the boot() function together with your boot_fn() function to estimate the standard errors of the logistic regression coefficients for each predictor.
+```{r}
+library(boot) 
+boot(data = redwine, boot_fn, R = 1000)
+```
+### c. Comment on the estimated standard errors obtained using the glm() function and using your bootstrap function.
+According to the results from Question 1 and 3, the standard errors obtained using bootstrap function are all a little bit larger than the ones obtained by glm(). To sum up, the estimated standard errors obtained by the two methods are pretty close.
